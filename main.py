@@ -1,11 +1,12 @@
-import numpy
-import pandas
 from ingest_data import ingest_data
+from average_sample_calibration import average_replicates
 
 calibration_data = ingest_data('data/calibration.csv')
-print(calibration_data.head())
+calibration = average_replicates(calibration_data)
+print(calibration)
 
-sample_data = ingest_data('data/sample.csv')
-print(sample_data.head())
+
+
+
 
 
