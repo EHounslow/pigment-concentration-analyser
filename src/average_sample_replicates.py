@@ -13,5 +13,4 @@ def average_replicates(dataframe: DataFrame) -> DataFrame:
         A dataframe with the averages of the replicates for each sample and dilution
     """
     dataframe = dataframe.drop(columns=["Well"])
-    averages = (dataframe.groupby(["Sample", "Dilution"]).mean()).reset_index()
-    return averages
+    return (dataframe.groupby(["Sample", "Dilution"]).mean()).reset_index()

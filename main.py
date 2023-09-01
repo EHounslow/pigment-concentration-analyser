@@ -1,85 +1,40 @@
-from pandas import concat
-from numpy import asarray
 from sklearn.linear_model import LinearRegression
-from matplotlib.pyplot import close, legend, plot, savefig, title, xlabel, ylabel
-from average_sample_replicates import average_replicates
-from ingest_data import ingest_data
+
+from src.average_sample_replicates import average_replicates
+from src.blank_correction import (set_concentration_in_dataframe,
+                                  subtract_blanks_from_sample)
+from src.ingest_data import ingest_data
+from src.plot_data import (plot_calibration_curve,
+                           plot_corrected_calibration_data,
+                           plot_raw_calibration_data)
 
 calibration_data = ingest_data("data/calibration.csv")
-calibration = average_replicates(calibration_data)
 
-blank = calibration.loc[calibration["Sample"] == "Blank"]
-blank["Concentration"] = "Blank"
-samples = calibration.loc[calibration["Sample"] != "Blank"]
-samples["Concentration"] = 50 / samples["Dilution"]
-full = concat([blank, samples])
-full = full.drop(columns=["Dilution", "Sample"]).set_index("Concentration")
+averaged_calibration = average_replicates(calibration_data)
 
-print(full)
+raw_calibration_samples = set_concentration_in_dataframe(averaged_calibration)
+plot_raw_calibration_data(raw_calibration_samples)
 
-adjusted = full - full.loc["Blank"].values.squeeze()
-adjusted = adjusted.drop(["Blank"])
-wavelength = asarray(adjusted.columns, float)
+corrected_calibration_data = subtract_blanks_from_sample(raw_calibration_samples)
+plot_corrected_calibration_data(corrected_calibration_data)
 
-plot(wavelength, adjusted.loc[50.0], label="50.0")
-plot(wavelength, adjusted.loc[25.0], label="25.0")
-plot(wavelength, adjusted.loc[12.5], label="12.5")
-plot(wavelength, adjusted.loc[6.25], label="6.25")
-plot(wavelength, adjusted.loc[3.125], label="3.125 ")
-plot(wavelength, adjusted.loc[1.5625], label="1.5625")
-plot(wavelength, adjusted.loc[0.78125], label="0.78125")
-plot(wavelength, adjusted.loc[0.390625], label="0.390625")
-
-legend()
-title("Blank Adjusted Sample Data")
-xlabel("Wavelength")
-ylabel("Absorbance")
-savefig("results/Blank Adjusted Samples")
-close()
-
-wavelength_raw = asarray(full.columns, float)
-plot(wavelength_raw, full.loc[50.0], label="50.0")
-plot(wavelength_raw, full.loc[25.0], label="25.0")
-plot(wavelength_raw, full.loc[12.5], label="12.5")
-plot(wavelength_raw, full.loc[6.25], label="6.25")
-plot(wavelength_raw, full.loc[3.125], label="3.125 ")
-plot(wavelength_raw, full.loc[1.5625], label="1.5625")
-plot(wavelength_raw, full.loc[0.78125], label="0.78125")
-plot(wavelength_raw, full.loc[0.390625], label="0.390625")
-plot(wavelength_raw, full.loc["Blank"], label="Blank")
-
-legend()
-title("Raw Sample Data")
-xlabel("Wavelength")
-ylabel("Absorbance")
-savefig("results/Raw Data")
-close()
-
-adjusted = adjusted.drop(adjusted.loc[:, '220':'300'].columns, axis=1)
-adjusted['Maximum Absorbance Wavelength'] = adjusted.idxmax(axis = 1)
-print(adjusted)
-
-
-concentration = adjusted.index.values
-absorbance = adjusted['534'].values
-plot(concentration, absorbance)
-title("Calibration Curve 534 nm")
-xlabel("Concentration")
-ylabel("Absorbance")
-savefig("results/Calibration Curve")
-close()
+corrected_calibration_data = corrected_calibration_data.drop(
+    corrected_calibration_data.loc[:, "220":"300"].columns, axis=1
+)
+corrected_calibration_data["Maximum Absorbance Wavelength"] = corrected_calibration_data.idxmax(axis=1)
+print(corrected_calibration_data["Maximum Absorbance Wavelength"])
+optimal_wavelength = str(corrected_calibration_data.loc[50.0]["Maximum Absorbance Wavelength"])
+concentration = corrected_calibration_data.index.values
+absorbance = corrected_calibration_data[optimal_wavelength].values
+plot_calibration_curve(concentration, absorbance, optimal_wavelength)
 
 sample_data = ingest_data("data/sample.csv")
-sample = average_replicates(sample_data)
-
-sample = sample.drop(columns=["Dilution"]).set_index("Sample")
-
-adjusted_samples = sample.loc["X1"] - sample.loc["Blank"]
-
-sample_X1 = adjusted_samples.loc['534']
+samples_averaged = average_replicates(sample_data)
+samples_averaged = samples_averaged.drop(columns=["Dilution"]).set_index("Sample")
+samples_minus_blanks = subtract_blanks_from_sample(samples_averaged)
+sample_minus_blanks_values = samples_minus_blanks[optimal_wavelength].values
 
 calibration_model = LinearRegression().fit(absorbance.reshape(-1, 1), concentration.reshape(-1, 1))
+concentration_prediction = calibration_model.predict(sample_minus_blanks_values.reshape(-1, 1))
 
-y_pred = calibration_model.predict(sample_X1.reshape(-1, 1))
-
-print('The concentration of the pigment sample is ', y_pred[0][0], ' mg/L')
+print(f"The concentration of the pigment sample is {concentration_prediction[0][0]} mg/L")
